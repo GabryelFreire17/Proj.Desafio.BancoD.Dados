@@ -28,22 +28,25 @@ public class ComercioService {
     }
 
     public CommerceDTO salvar(CommerceDTO dto) {
-        // 1. Converte a String do DTO para o Enum para podermos validar
         TipoComercio tipoEnum = (dto.getTipoComercio() != null) ? TipoComercio.valueOf(dto.getTipoComercio()) : null;
 
-        // 2. Trava de Nome: Verifica se já existe esse NOME na mesma cidade
+        // Validação Unificada: Nome ou Tipo repetidos na mesma cidade
         boolean nomeExiste = repository.existsByNomeComercioAndCidadeId(dto.getNome(), dto.getCidadeId());
-        
-        // 3. Trava de Tipo: Verifica se já existe esse TIPO na mesma cidade
         boolean tipoExiste = (tipoEnum != null) && repository.existsByTipoAndCidadeId(tipoEnum, dto.getCidadeId());
 
-        // Só barramos se for um NOVO cadastro (id null)
+        // Se for um novo cadastro (id null) OU se os dados existentes no banco forem diferentes do que está vindo no DTO
         if (dto.getId() == null) {
-            if (nomeExiste) {
-                throw new RuntimeException("Este nome de comércio já está cadastrado nesta cidade!");
-            }
-            if (tipoExiste) {
-                throw new RuntimeException("Já existe um comércio do tipo " + dto.getTipoComercio() + " nesta cidade!");
+            validarDuplicidade(nomeExiste, tipoExiste, dto.getTipoComercio());
+        } else {
+            // Lógica para edição: só valida se o nome ou tipo mudaram para algo já existente
+            Comercio comercioAtual = repository.findById(dto.getId()).orElse(null);
+            if (comercioAtual != null) {
+                if (!comercioAtual.getNomeComercio().equalsIgnoreCase(dto.getNome()) && nomeExiste) {
+                    throw new RuntimeException("Este novo nome de comércio já está cadastrado nesta cidade!");
+                }
+                if (comercioAtual.getTipo() != tipoEnum && tipoExiste) {
+                    throw new RuntimeException("Já existe um comércio do tipo " + dto.getTipoComercio() + " nesta cidade!");
+                }
             }
         }
 
@@ -59,6 +62,16 @@ public class ComercioService {
         }
 
         return new CommerceDTO(repository.save(comercio));
+    }
+
+   
+    private void validarDuplicidade(boolean nomeExiste, boolean tipoExiste, String tipo) {
+        if (nomeExiste) {
+            throw new RuntimeException("Este nome de comércio já está cadastrado nesta cidade!");
+        }
+        if (tipoExiste) {
+            throw new RuntimeException("Já existe um comércio do tipo " + tipo + " nesta cidade!");
+        }
     }
 
     public void excluir(Long id) {

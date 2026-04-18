@@ -12,13 +12,7 @@ import { CidadeService } from '../../services/cidade.service';
   selector: 'app-comercio-list',
   standalone: true,
   imports: [
-    CommonModule,
-    FormsModule,
-    TableModule,
-    ButtonModule,
-    DialogModule,
-    InputTextModule,
-    DropdownModule
+    CommonModule, FormsModule, TableModule, ButtonModule, DialogModule, InputTextModule, DropdownModule
   ],
   templateUrl: './comercio-list.html',
   styleUrl: './comercio-list.css'
@@ -27,7 +21,7 @@ export class ComercioList implements OnInit {
   comercios: any[] = [];
   cidades: any[] = [];
   exibirModal: boolean = false;
-  private storageKey = 'comercios_db'; // "Banco" de comércios no navegador
+  private storageKey = 'comercios_db';
 
   tipos = [
     { label: 'Padaria', value: 'PADARIA' },
@@ -36,25 +30,15 @@ export class ComercioList implements OnInit {
     { label: 'Lanchonete', value: 'LANCHONETE' }
   ];
 
-  novoComercio: any = { 
-    id: null, 
-    nome: '', 
-    nomeResponsavel: '', 
-    tipoComercio: '', 
-    cidadeId: null 
-  };
+  novoComercio: any = { id: null, nome: '', nomeResponsavel: '', tipoComercio: '', cidadeId: null };
 
-  constructor(
-    private cidadeService: CidadeService,
-    private cd: ChangeDetectorRef
-  ) {}
+  constructor(private cidadeService: CidadeService, private cd: ChangeDetectorRef) {}
 
   ngOnInit(): void {
     this.listarTudo();
   }
 
   listarTudo() {
-   
     this.cidadeService.listar().subscribe({
       next: (dados) => {
         this.cidades = dados;
@@ -62,8 +46,6 @@ export class ComercioList implements OnInit {
       },
       error: (err) => console.error('Erro ao carregar cidades', err)
     });
-
-   
     const dados = localStorage.getItem(this.storageKey);
     this.comercios = dados ? JSON.parse(dados) : [];
     this.cd.detectChanges();
@@ -80,24 +62,37 @@ export class ComercioList implements OnInit {
   }
 
   salvar() {
-    if (!this.novoComercio.nomeResponsavel || !this.novoComercio.cidadeId) {
-      alert('Preencha o responsável e a cidade!');
+    if (!this.novoComercio.nome || !this.novoComercio.tipoComercio || !this.novoComercio.cidadeId) {
+      alert('Preencha o nome, tipo e a cidade!');
       return;
     }
 
-    let listaAtual = [...this.comercios];
+    // --- LÓGICA DE VALIDAÇÃO (FUSÃO DE REGRAS) ---
+    const listaAtual = [...this.comercios];
 
+    // Verifica se já existe outro comércio na MESMA cidade com o mesmo NOME ou MESMO TIPO
+    const conflito = listaAtual.find(c => 
+      c.cidadeId === this.novoComercio.cidadeId && 
+      c.id !== this.novoComercio.id && // Ignora o próprio registro em caso de edição
+      (c.nome.toLowerCase() === this.novoComercio.nome.toLowerCase() || c.tipoComercio === this.novoComercio.tipoComercio)
+    );
+
+    if (conflito) {
+      const motivo = conflito.nome.toLowerCase() === this.novoComercio.nome.toLowerCase() ? 'nome' : 'tipo';
+      alert(`Erro: Já existe um comércio com este ${motivo} nesta cidade!`);
+      return;
+    }
+    // ---------------------------------------------
+
+    let novaLista;
     if (this.novoComercio.id) {
-      // Editar: remove o antigo e adiciona o atualizado
-      listaAtual = listaAtual.filter(c => c.id !== this.novoComercio.id);
+      novaLista = listaAtual.map(c => c.id === this.novoComercio.id ? { ...this.novoComercio } : c);
     } else {
-      
       this.novoComercio.id = Math.floor(Math.random() * 10000);
+      novaLista = [...listaAtual, { ...this.novoComercio }];
     }
 
-    listaAtual.push({ ...this.novoComercio });
-    localStorage.setItem(this.storageKey, JSON.stringify(listaAtual));
-
+    localStorage.setItem(this.storageKey, JSON.stringify(novaLista));
     alert('Salvo com sucesso!');
     this.exibirModal = false;
     this.listarTudo();
@@ -111,17 +106,28 @@ export class ComercioList implements OnInit {
     }
   }
 
-  // Mantive as chamadas do cidadeService, que agora também usa LocalStorage
+  
   abrirModalCidade() {
     const nome = prompt('Digite o nome da nova cidade:');
     if (nome) {
+      // Validação de cidade duplicada no front (antes de ir para o service)
+      const cidadeExiste = this.cidades.some(c => c.nome.toLowerCase() === nome.toLowerCase());
+      if (cidadeExiste) {
+        alert('Esta cidade já está cadastrada!');
+        return;
+      }
       this.cidadeService.salvar({ nome }).subscribe(() => this.listarTudo());
     }
   }
 
   editarCidade(cidade: any) {
     const novoNome = prompt('Editar nome da cidade:', cidade.nome);
-    if (novoNome) {
+    if (novoNome && novoNome !== cidade.nome) {
+      const cidadeExiste = this.cidades.some(c => c.nome.toLowerCase() === novoNome.toLowerCase());
+      if (cidadeExiste) {
+        alert('Já existe outra cidade com este nome!');
+        return;
+      }
       this.cidadeService.salvar({ id: cidade.id, nome: novoNome }).subscribe(() => this.listarTudo());
     }
   }

@@ -15,24 +15,26 @@ public class CidadeService {
     @Autowired
     private CidadeRepository repository;
 
-    
     public List<CityDTO> listarTodas() {
         return repository.findAll().stream()
                 .map(cidade -> new CityDTO(cidade))
                 .collect(Collectors.toList());
     }
 
-    
     public CityDTO salvar(CityDTO dto) {
+        
+        if (repository.existsByNomeIgnoreCase(dto.getNome())) {
+            throw new RuntimeException("Erro: Já existe uma cidade cadastrada com o nome '" + dto.getNome() + "'.");
+        }
+
         Cidade cidade = new Cidade();
-        cidade.setId(dto.getId()); 
+        cidade.setId(dto.getId());
         cidade.setNome(dto.getNome());
         
         cidade = repository.save(cidade);
         return new CityDTO(cidade);
     }
 
-   
     public void excluir(Long id) {
         repository.deleteById(id);
     }
